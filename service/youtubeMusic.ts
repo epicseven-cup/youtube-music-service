@@ -4,6 +4,7 @@ import {DEFAULT} from "../shared/constants";
 import * as net from "node:net";
 
 import * as winston from 'winston'
+import * as fs from "node:fs";
 
 
 // websocket of discord-rpc doesn't work, or is not supported
@@ -19,72 +20,31 @@ export class YouTubeDiscordRPCService {
     constructor(clientId: string, port: number) {
         this._clientId = clientId
         this._port = port
-        this._rpcClient = new Client({transport: 'ipc'})
         this._wsServer = new Server({transports: ["websocket"]})
         this._jobs = []
+
+        const logPath = `${process.env.HOME}/.youtube-music-service`
+
+        if (!fs.existsSync(logPath)) {
+            fs.mkdirSync(logPath)
+        }
+        const currentTime = new Date(Date.now()).toISOString();
+
         this._logger = winston.createLogger({
             level: 'info',
             format: winston.format.json(),
             defaultMeta: {service: 'youtube-music'},
             transports: [
-                new winston.transports.File({filename: 'youtube-mp3-error.log', level: 'error', options: {flags: 'w'}}),
-                new winston.transports.File({filename: 'youtube-mp3.log', options: {flags: 'w'}}),
+                new winston.transports.File({filename: `${logPath}/youtube-mp3-error-${currentTime}.log`, level: 'error', options: {flags: 'w'}}),
+                new winston.transports.File({filename: `${logPath}/youtube-mp3-${currentTime}.log`, options: {flags: 'w'}}),
             ]
         })
     }
 
-    connect() {
-        this._rpcClient.login({clientId: this._clientId})
-        this._logger.info('Connected to Youtube Music Server')
-        this._rpcClient.setActivity(DEFAULT)
-    }
-
-    reconnect() {
-        // this._rpcClient = new Client({transport: 'ipc'})
-        this._jobs.forEach((job) => {
-            clearInterval(job)
-        })
-        this._jobs = []
+    start_discordRPC_client(){
         this._rpcClient = new Client({transport: 'ipc'})
         this._rpcClient.login({clientId: this._clientId})
-        this._rpcClient.on('ready', () => {
-            this._rpcClient.setActivity(DEFAULT)
-        })
-    }
-
-    update(p: Presence) {
-        this._rpcClient.setActivity(p)
-        this._logger.info('Updated Discord RPC')
-    }
-
-    discover() {
-        const {env: {XDG_RUNTIME_DIR, TMPDIR, TMP, TEMP}} = process;
-        const prefix = XDG_RUNTIME_DIR || TMPDIR || TMP || TEMP || '/tmp';
-
-        const path: string = process.platform == 'win32' ? `\\.\pipe\discord-ipc` : `${prefix.replace(/\/$/, '')}/discord-ipc`;
-        for (let i = 0; i <= 9; i++) {
-            const fullPath: string = `${path}-${i}`
-            const client = net.createConnection({path: fullPath})
-            client.on('error', () => {
-                this._logger.error('Failed to reconnect to Discord pipe')
-            })
-
-            client.on('connect', () => {
-                this._logger.info('Discovered that discord pipe is up')
-                client.end()
-                this.reconnect()
-            })
-
-            client.on('close', () => {
-                this._logger.info('Discord Status finder closed')
-            })
-        }
-    }
-
-    run() {
-        this._wsServer.listen(this._port)
-
-        this._rpcClient.on('ready', () => {
+        this._rpcClient.on('ready', ()=> {
             this._rpcClient.setActivity(DEFAULT)
         })
 
@@ -98,6 +58,61 @@ export class YouTubeDiscordRPCService {
             this._jobs.push(id)
         })
 
+    }
+
+    reconnect() {
+        this._logger.info('Reconnecting...')
+        this._jobs.forEach((job) => {
+            clearInterval(job)
+        })
+        this._jobs = []
+
+        this.start_discordRPC_client()
+        this._logger.info("Reconnected to Discord")
+    }
+
+    update(p: Presence) {
+        this._logger.info('Updating...')
+        this._rpcClient.setActivity(p)
+        // Quick bug fix
+        if (p.details === ""){
+            p.details = "--"
+        }
+        this._logger.info('Updated Discord RPC')
+        this._logger.info(p)
+    }
+
+    discover() {
+        this._logger.info('Discovering...')
+        const {env: {XDG_RUNTIME_DIR, TMPDIR, TMP, TEMP}} = process;
+        const prefix = XDG_RUNTIME_DIR || TMPDIR || TMP || TEMP || '/tmp';
+
+        const path: string = process.platform == 'win32' ? `\\.\pipe\discord-ipc` : `${prefix.replace(/\/$/, '')}/discord-ipc`;
+        for (let i = 0; i <= 9; i++) {
+            const fullPath: string = `${path}-${i}`
+            const client = net.createConnection({path: fullPath})
+            client.on('error', () => {
+                this._logger.error(`Failed to reconnect to ${fullPath}`)
+            })
+
+            client.on('connect', () => {
+                this._logger.info(`Discovered that ${fullPath} is up`)
+                client.end()
+                this.reconnect()
+            })
+
+            client.on('close', () => {
+                this._logger.info(`${fullPath} is closed`)
+            })
+        }
+        this._logger.info('Finish discovering')
+    }
+
+    run() {
+        this._wsServer.listen(this._port)
+
+        this.start_discordRPC_client()
+
         this._wsServer.on('connection', (socket) => {
             this._logger.info('Connected to Youtube Music Browser Plugin')
 
@@ -109,14 +124,12 @@ export class YouTubeDiscordRPCService {
         })
 
         this._wsServer.on('error', function (socket) {
-            console.log("error", socket.data);
+            this._logger.error(`Failed to connect to Youtube Music Browser Plugin`)
+            this._logger.error(socket.data);
         })
 
         this._wsServer.on('disconnect', function (socket) {
-            console.log("disconnect", socket.id);
-
+            this._logger.info(`Disconnected from Youtube Music Browser Plugin`, socket.id)
         })
-
-        this._rpcClient.login({clientId: this._clientId})
     }
 }
