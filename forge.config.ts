@@ -7,27 +7,27 @@ import {FuseV1Options, FuseVersion} from '@electron/fuses';
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
-        icon: "./tray/tray.icns",
         extraResource: ["./tray", "./dmg"],
     },
     rebuildConfig: {},
     makers: [
+        {
+            name: '@electron-forge/maker-wix',
+            platforms:["win32"],
+            config: {
+                language: 1033, // 1033 is English (US)
+                manufacturer: 'Tomato'
+            }
+        },
+
         {
             name: '@electron-forge/maker-squirrel',
             config: {},
         },
         {
             name: '@electron-forge/maker-zip',
-            platforms: ['darwin', 'linux', 'win32'],
+            platforms: ['darwin', 'linux'],
             config: {}
-        },
-        {
-            name: '@electron-forge/maker-deb',
-            config: {},
-        },
-        {
-            name: '@electron-forge/maker-rpm',
-            config: {},
         },
         {
             name: '@electron-forge/maker-dmg',
