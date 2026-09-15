@@ -1,6 +1,6 @@
 import {app, Menu, Tray, nativeImage} from 'electron'
-import {YouTubeDiscordRPCService} from "./service/youtubeMusic";
-import {CLIENT_ID} from "./shared/constants";
+import {YouTubeDiscordRPCService} from "./service/youtubeMusic.js";
+import {CLIENT_ID} from "./shared/constants.js";
 import * as path from "node:path";
 
 

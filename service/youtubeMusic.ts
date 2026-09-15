@@ -1,7 +1,7 @@
 import { Client, Presence } from "discord-rpc";
 import { Server } from "socket.io";
-import { DEFAULT } from "../shared/constants";
-import * as net from "node:net";
+import { DEFAULT } from "../shared/constants.js";
+import * as net from "node:net"
 
 import * as winston from "winston";
 import * as fs from "node:fs";
