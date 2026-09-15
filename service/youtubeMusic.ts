@@ -5,8 +5,9 @@ import * as net from "node:net"
 
 import * as winston from "winston";
 import * as fs from "node:fs";
+import * as os from "node:os";
 
-const LOGPATH = `${process.env.HOME}/.youtube-music-service`;
+const LOGPATH = `${os.homedir()}/.youtube-music-service`;
 
 
 function CreateLogger() {
@@ -83,7 +84,15 @@ export class YouTubeDiscordRPCService {
       this._jobs.push(id);
     });
 
-    this._rpcClient.login({ clientId: this._clientId });
+    this._rpcClient.login({ clientId: this._clientId }).catch(() => {
+      LOGGER.info("Discord is not running yet, waiting for it to start");
+      this._rpcClient = null;
+
+      const id = setInterval(() => {
+        this.discover();
+      }, 3000);
+      this._jobs.push(id);
+    });
   }
 
   reconnect() {
